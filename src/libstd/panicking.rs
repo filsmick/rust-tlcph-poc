@@ -11,9 +11,9 @@
 use prelude::v1::*;
 use io::prelude::*;
 
-use any::Any;
 use cell::RefCell;
 use rt::{backtrace, unwind};
+use rt::unwind::PanicData;
 use sys::stdio::Stderr;
 use sys_common::thread_info;
 
@@ -23,7 +23,11 @@ thread_local! {
     }
 }
 
-pub fn on_panic(obj: &(Any+Send), file: &'static str, line: u32) {
+pub fn on_panic(panic_data: &PanicData) {
+    let obj = panic_data.msg();
+    let file = panic_data.file();
+    let line = panic_data.line();
+
     let msg = match obj.downcast_ref::<&'static str>() {
         Some(s) => *s,
         None => match obj.downcast_ref::<String>() {

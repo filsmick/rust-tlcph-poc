@@ -64,7 +64,7 @@ use prelude::v1::*;
 
 use any::Any;
 use boxed;
-use cell::Cell;
+use cell::{Cell, RefCell};
 use cmp;
 use panicking;
 use fmt;
@@ -244,42 +244,17 @@ pub fn begin_unwind<M: Any + Send>(msg: M, file_line: &(&'static str, u32)) -> !
 #[inline(never)] #[cold] // this is the slow path, please never inline this
 fn begin_unwind_inner(msg: Box<Any + Send>,
                       file_line: &(&'static str, u32)) -> ! {
-    // Make sure the default failure handler is registered before we look at the
-    // callbacks. We also use a raw sys-based mutex here instead of a
-    // `std::sync` one as accessing TLS can cause weird recursive problems (and
-    // we don't need poison checking).
-    unsafe {
-        static LOCK: Mutex = Mutex::new();
-        static mut INIT: bool = false;
-        LOCK.lock();
-        if !INIT {
-            register(panicking::on_panic);
-            INIT = true;
-        }
-        LOCK.unlock();
-    }
+    {
+      let panic_data = PanicData {
+        msg: &*msg,
+        file: file_line.0,
+        line: file_line.1
+      };
 
-    // First, invoke call the user-defined callbacks triggered on thread panic.
-    //
-    // By the time that we see a callback has been registered (by reading
-    // MAX_CALLBACKS), the actual callback itself may have not been stored yet,
-    // so we just chalk it up to a race condition and move on to the next
-    // callback. Additionally, CALLBACK_CNT may briefly be higher than
-    // MAX_CALLBACKS, so we're sure to clamp it as necessary.
-    let callbacks = {
-        let amt = CALLBACK_CNT.load(Ordering::SeqCst);
-        &CALLBACKS[..cmp::min(amt, MAX_CALLBACKS)]
-    };
-    for cb in callbacks {
-        match cb.load(Ordering::SeqCst) {
-            0 => {}
-            n => {
-                let f: Callback = unsafe { mem::transmute(n) };
-                let (file, line) = *file_line;
-                f(&*msg, file, line);
-            }
-        }
-    };
+      ON_PANIC.with(|cb_refcell| {
+        (*cb_refcell.borrow())(&panic_data)
+      });
+    }
 
     // Now that we've run all the necessary unwind callbacks, we actually
     // perform the unwinding.
@@ -322,4 +297,34 @@ pub unsafe fn register(f: Callback) -> bool {
             false
         }
     }
+}
+
+/* TLCPH */
+
+pub type PanicHandler = Fn(&PanicData);
+
+thread_local! { static ON_PANIC: RefCell<Box<PanicHandler>> = RefCell::new(Box::new(panicking::on_panic)) }
+
+pub fn set_panic_handler(new_handler: Box<PanicHandler>) {
+  ON_PANIC.with(|cb_refcell| *cb_refcell.borrow_mut() = new_handler);
+}
+
+pub struct PanicData<'a> {
+  msg: &'a (Any + Send),
+  file: &'static str,
+  line: u32
+}
+
+impl<'a> PanicData<'a> {
+  pub fn msg(&self) -> &(Any + Send) {
+    self.msg
+  }
+
+  pub fn file(&self) -> &'static str {
+    self.file
+  }
+
+  pub fn line(&self) -> u32 {
+    self.line
+  }
 }

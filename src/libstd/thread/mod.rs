@@ -564,6 +564,12 @@ pub fn park_timeout(dur: Duration) {
     *guard = false;
 }
 
+#[unstable(feature = "custom_panic_handlers")]
+/// Sets the current thread's panic handler.
+pub fn set_panic_handler(handler: Box<unwind::PanicHandler>) {
+  unwind::set_panic_handler(handler);
+}
+
 ////////////////////////////////////////////////////////////////////////////////
 // Thread
 ////////////////////////////////////////////////////////////////////////////////
