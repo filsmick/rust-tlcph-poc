@@ -112,6 +112,29 @@ static CALLBACK_CNT: atomic::AtomicUsize = atomic::AtomicUsize::new(0);
 
 thread_local! { static PANICKING: Cell<bool> = Cell::new(false) }
 
+thread_local! { static ON_PANIC: RefCell<Rc<Fn(&PanicData)>> = RefCell::new(Rc::new(panicking::on_panic)) }
+
+pub struct PanicData<'a> {
+  msg: &'a (Any + Send),
+  file: &'static str,
+  line: u32
+}
+
+impl<'a> PanicData<'a> {
+  pub fn msg(&self) -> &(Any + Send) {
+    self.msg
+  }
+
+  pub fn file(&self) -> &'static str {
+    self.file
+  }
+
+  pub fn line(&self) -> u32 {
+    self.line
+  }
+}
+
+
 /// Invoke a closure, capturing the cause of panic if one occurs.
 ///
 /// This function will return `Ok(())` if the closure did not panic, and will
@@ -270,60 +293,6 @@ fn begin_unwind_inner(msg: Box<Any + Send>,
     PANICKING.with(|s| s.set(true));
     rust_panic(msg);
 }
-
-/// Register a callback to be invoked when a thread unwinds.
-///
-/// This is an unsafe and experimental API which allows for an arbitrary
-/// callback to be invoked when a thread panics. This callback is invoked on both
-/// the initial unwinding and a double unwinding if one occurs. Additionally,
-/// the local `Thread` will be in place for the duration of the callback, and
-/// the callback must ensure that it remains in place once the callback returns.
-///
-/// Only a limited number of callbacks can be registered, and this function
-/// returns whether the callback was successfully registered or not. It is not
-/// currently possible to unregister a callback once it has been registered.
-pub unsafe fn register(f: Callback) -> bool {
-    match CALLBACK_CNT.fetch_add(1, Ordering::SeqCst) {
-        // The invocation code has knowledge of this window where the count has
-        // been incremented, but the callback has not been stored. We're
-        // guaranteed that the slot we're storing into is 0.
-        n if n < MAX_CALLBACKS => {
-            let prev = CALLBACKS[n].swap(mem::transmute(f), Ordering::SeqCst);
-            rtassert!(prev == 0);
-            true
-        }
-        // If we accidentally bumped the count too high, pull it back.
-        _ => {
-            CALLBACK_CNT.store(MAX_CALLBACKS, Ordering::SeqCst);
-            false
-        }
-    }
-}
-
-/* TLCPH */
-
-
-pub struct PanicData<'a> {
-  msg: &'a (Any + Send),
-  file: &'static str,
-  line: u32
-}
-
-impl<'a> PanicData<'a> {
-  pub fn msg(&self) -> &(Any + Send) {
-    self.msg
-  }
-
-  pub fn file(&self) -> &'static str {
-    self.file
-  }
-
-  pub fn line(&self) -> u32 {
-    self.line
-  }
-}
-
-thread_local! { static ON_PANIC: RefCell<Rc<Fn(&PanicData)>> = RefCell::new(Rc::new(panicking::on_panic)) }
 
 pub fn set_panic_handler<T: Fn(&PanicData) + 'static>(new_handler: T) {
   ON_PANIC.with(|cb_refcell| *cb_refcell.borrow_mut() = Rc::new(new_handler));
