@@ -164,11 +164,13 @@ use prelude::v1::*;
 
 use alloc::boxed::FnBox;
 use any::Any;
+use rc::Rc;
 use cell::UnsafeCell;
 use fmt;
 use io;
 use marker::PhantomData;
 use rt::{self, unwind};
+use rt::unwind::PanicData;
 use sync::{Mutex, Condvar, Arc};
 use sys::thread as imp;
 use sys_common::thread_info;
@@ -566,8 +568,14 @@ pub fn park_timeout(dur: Duration) {
 
 #[unstable(feature = "custom_panic_handlers")]
 /// Sets the current thread's panic handler.
-pub fn set_panic_handler(handler: Box<unwind::PanicHandler>) {
+pub fn set_panic_handler<T: Fn(&PanicData) + 'static>(handler: T) {
   unwind::set_panic_handler(handler);
+}
+
+#[unstable(feature = "custom_panic_handlers")]
+/// Returns a reference-counted pointer to the current thread's panic handler.
+pub fn get_panic_handler() -> Rc<Fn(&PanicData) + 'static> {
+  unwind::get_panic_handler()
 }
 
 ////////////////////////////////////////////////////////////////////////////////

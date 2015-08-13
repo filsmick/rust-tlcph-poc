@@ -64,6 +64,7 @@ use prelude::v1::*;
 
 use any::Any;
 use boxed;
+use rc::Rc;
 use cell::{Cell, RefCell};
 use cmp;
 use panicking;
@@ -301,13 +302,6 @@ pub unsafe fn register(f: Callback) -> bool {
 
 /* TLCPH */
 
-pub type PanicHandler = Fn(&PanicData);
-
-thread_local! { static ON_PANIC: RefCell<Box<PanicHandler>> = RefCell::new(Box::new(panicking::on_panic)) }
-
-pub fn set_panic_handler(new_handler: Box<PanicHandler>) {
-  ON_PANIC.with(|cb_refcell| *cb_refcell.borrow_mut() = new_handler);
-}
 
 pub struct PanicData<'a> {
   msg: &'a (Any + Send),
@@ -327,4 +321,14 @@ impl<'a> PanicData<'a> {
   pub fn line(&self) -> u32 {
     self.line
   }
+}
+
+thread_local! { static ON_PANIC: RefCell<Rc<Fn(&PanicData)>> = RefCell::new(Rc::new(panicking::on_panic)) }
+
+pub fn set_panic_handler<T: Fn(&PanicData) + 'static>(new_handler: T) {
+  ON_PANIC.with(|cb_refcell| *cb_refcell.borrow_mut() = Rc::new(new_handler));
+}
+
+pub fn get_panic_handler() -> Rc<Fn(&PanicData) + 'static> {
+  ON_PANIC.with(|cb_refcell| cb_refcell.borrow().clone())
 }
