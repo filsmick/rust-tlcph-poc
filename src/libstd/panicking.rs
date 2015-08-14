@@ -24,9 +24,9 @@ thread_local! {
 }
 
 pub fn on_panic(panic_data: &PanicData) {
-    let obj = panic_data.msg();
-    let file = panic_data.file();
-    let line = panic_data.line();
+    let obj = panic_data.msg;
+    let file = panic_data.file;
+    let line = panic_data.line;
 
     let msg = match obj.downcast_ref::<&'static str>() {
         Some(s) => *s,

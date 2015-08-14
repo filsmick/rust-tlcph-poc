@@ -115,25 +115,10 @@ thread_local! { static PANICKING: Cell<bool> = Cell::new(false) }
 thread_local! { static ON_PANIC: RefCell<Rc<Fn(&PanicData)>> = RefCell::new(Rc::new(panicking::on_panic)) }
 
 pub struct PanicData<'a> {
-  msg: &'a (Any + Send),
-  file: &'static str,
-  line: u32
+  pub msg: &'a (Any + Send),
+  pub file: &'static str,
+  pub line: u32
 }
-
-impl<'a> PanicData<'a> {
-  pub fn msg(&self) -> &(Any + Send) {
-    self.msg
-  }
-
-  pub fn file(&self) -> &'static str {
-    self.file
-  }
-
-  pub fn line(&self) -> u32 {
-    self.line
-  }
-}
-
 
 /// Invoke a closure, capturing the cause of panic if one occurs.
 ///
