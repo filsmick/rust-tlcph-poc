@@ -93,25 +93,7 @@ pub mod imp;
 #[path = "gcc.rs"] #[doc(hidden)]
 pub mod imp;
 
-pub type Callback = fn(msg: &(Any + Send), file: &'static str, line: u32);
-
-// Variables used for invoking callbacks when a thread starts to unwind.
-//
-// For more information, see below.
-const MAX_CALLBACKS: usize = 16;
-static CALLBACKS: [atomic::AtomicUsize; MAX_CALLBACKS] =
-        [atomic::AtomicUsize::new(0), atomic::AtomicUsize::new(0),
-         atomic::AtomicUsize::new(0), atomic::AtomicUsize::new(0),
-         atomic::AtomicUsize::new(0), atomic::AtomicUsize::new(0),
-         atomic::AtomicUsize::new(0), atomic::AtomicUsize::new(0),
-         atomic::AtomicUsize::new(0), atomic::AtomicUsize::new(0),
-         atomic::AtomicUsize::new(0), atomic::AtomicUsize::new(0),
-         atomic::AtomicUsize::new(0), atomic::AtomicUsize::new(0),
-         atomic::AtomicUsize::new(0), atomic::AtomicUsize::new(0)];
-static CALLBACK_CNT: atomic::AtomicUsize = atomic::AtomicUsize::new(0);
-
 thread_local! { static PANICKING: Cell<bool> = Cell::new(false) }
-
 thread_local! { static ON_PANIC: RefCell<Rc<Fn(&PanicData)>> = RefCell::new(Rc::new(panicking::on_panic)) }
 
 pub struct PanicData<'a> {
